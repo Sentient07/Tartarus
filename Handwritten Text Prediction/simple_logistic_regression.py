@@ -46,7 +46,9 @@ def accuracy(predicted, actual):
         total += 1
         if p == a:
             correct += 1
+    print correct/total
     return correct / total
+
 
 if __name__ == '__main__':
 
@@ -103,6 +105,6 @@ if __name__ == '__main__':
 	        else:
 	            temp_alpha = temp_alpha / 1.5
 
-	compute_prediction = predict_func(test_set)
-	accuracy(prediction, test_set[1])
-	prediction = predict_func(test_set[0])
+	compute_prediction = predict_func(test_set[0])
+	accuracy(compute_prediction, test_set[1])
+	
