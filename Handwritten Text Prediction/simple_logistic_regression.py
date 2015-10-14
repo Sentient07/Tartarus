@@ -6,7 +6,7 @@ import numpy as np
 from theano import *
 import theano.tensor as T
 import cPickle, gzip
-
+import math
 
 #Storing the dataset in shared theano variable
 def shared_dataset(data_xy, borrow=True):
@@ -56,12 +56,12 @@ if __name__ == '__main__':
     #Storing dataset in variable
 	inp_train_set, oup_train_set = shared_dataset(train_set)
 	inp_test_set, oup_test_set = shared_dataset(test_set)
-	inp_cv_set, oup_cv_set = shared_dataset(valid_set)
+	inp_test_set_cv_set, oup_cv_set = shared_dataset(valid_set)
 
 	#split to batches
 	n_train_batches = inp_train_set.get_value(borrow=True).shape[0] / 500
 	n_valid_batches = inp_test_set.get_value(borrow=True).shape[0] / 500
-	n_test_batches = inp_cv_set.get_value(borrow=True).shape[0] / 500
+	n_test_batches = inp_test_set_cv_set.get_value(borrow=True).shape[0] / 500
 
 	weights = (10, 50)
 	bias = 10
@@ -71,10 +71,10 @@ if __name__ == '__main__':
 
 
 	#using shared function because it's a convenient
-	w_shared = shared(np.random.random(weights), name="w_shared")
-	b_shared = shared(np.random.random(bias), name="b_shared")
-	hidden_w_shared = shared(np.random.random(hidden_weights), name="hidden_w_shared")
-	hidden_b_shared = shared(np.random.random(hidden_bias), name="hidden_b_shared")
+	w2 = shared(np.random.random(weights) - 0.5, name="w2")
+	b2 = shared(np.random.random(bias) - 0.5, name="b2")
+	w1 = shared(np.random.random(hidden_weights) - 0.5, name="w1")
+	b1 = shared(np.random.random(hidden_bias) - 0.5, name="b1")
 
 
 	#little confusion between usage of dmatrix and dvector
@@ -83,54 +83,40 @@ if __name__ == '__main__':
 	#Encode labels
 
 	#The hidden layer computation
-	hidden = T.nnet.sigmoid(inp.dot(hidden_w_shared.transpose()) + hidden_b_shared)
+	hidden = T.nnet.sigmoid(inp.dot(w1.transpose()) + b1)
 
 	#The softmax computation
-	output = T.nnet.softmax(hidden.dot(w_shared.transpose()) + b_shared)
-	predict_y = T.argmax(output, axis=1)
+	output = T.nnet.softmax(hidden.dot(w2.transpose()) + b2)
+	predict = T.argmax(output, axis=1)
 	
 	cost = T.nnet.binary_crossentropy(output, labels).mean()
-	cost_compute = function([inp, labels], cost)
 
 	#Regularization
-	cost = cost + 0.0001 * ((w_shared * w_shared).sum() + (hidden_w_shared * hidden_w_shared).sum()
-			+ (b_shared * b_shared).sum() + (hidden_b_shared * hidden_b_shared).sum())
+	#cost = cost + 0.0001 * ((w_shared * w_shared).sum() + (hidden_w_shared * hidden_w_shared).sum()+ (b_shared * b_shared).sum() + (hidden_b_shared * hidden_b_shared).sum())
 
-	predict_func = function([inp], predict_y)
 
-	#output 
-	weight_grad = grad(cost, w_shared)
-	bias_grad = grad(cost, b_shared)
-
-	#hidden layer
-	hidden_weight_grad = grad(cost, hidden_w_shared)
-	hidden_bias_grad = grad(cost, hidden_b_shared)
-
+	predict_function = function([inp], predict)
 
 	alpha = T.dscalar('alpha')
-
-	updates = [(w_shared, w_shared - alpha * weight_grad),
-				(hidden_w_shared, hidden_w_shared - alpha * hidden_weight_grad),
-	           (b_shared, b_shared - alpha * bias_grad),
-	           (hidden_b_shared, hidden_b_shared - alpha * hidden_bias_grad)]
-
+	#weights = [hidden_w_shared, w_shared, hidden_b_shared, b_shared]
+	weights = [w1, w2, b1, b2]
+	updates = [(w, w - alpha * grad(cost, w)) for w in weights]
 	train = function([inp, labels, alpha], cost, updates=updates)
+
+	temp_alpha = 5.0
 	labeled = encode_labels(train_set[1], 9)
-	temp_alpha = 10.0
-	costs = []
+	old_cost = 0
 	while True:
-	    costs.append(float(train(train_set[0], labeled, temp_alpha)))
+	    current_cost = float(train(train_set[0], labeled, temp_alpha))
 	    
-	    if len(costs) % 10 == 0:
-	        print 'Epoch', len(costs), 'with cost', costs[-1], 'and alpha', temp_alpha
-	    if len(costs) > 2 and costs[-2] - costs[-1] < 0.0001:
-	        if temp_alpha < 0.2:
-	            break
+	    if old_cost != 0 and old_cost - current_cost < 0.0001:
+	        if temp_alpha < 0.15:	        	
+	        	print "temp_alpha is.." , temp_alpha
+	        	break
 	        else:
 	            temp_alpha = temp_alpha / 1.5
- 	
- 	print "len(costs)" 
- 	print len(costs) 
-	compute_prediction = predict_func(test_set[0])
-	accuracy(compute_prediction, test_set[1])
+	    old_cost = current_cost
+
+	prediction = predict_function(test_set[0])
+	accuracy(prediction, test_set[1])
 	
