@@ -103,19 +103,12 @@ if __name__ == '__main__':
 	updates = [(w, w - alpha * grad(cost, w)) for w in weights]
 	train = function([inp, labels, alpha], cost, updates=updates)
 
-	temp_alpha = 5.0
+	temp_alpha = 6.0
 	labeled = encode_labels(train_set[1], 9)
-	old_cost = 0
-	while True:
-	    current_cost = float(train(train_set[0], labeled, temp_alpha))
-	    
-	    if old_cost != 0 and old_cost - current_cost < 0.0001:
-	        if temp_alpha < 0.15:	        	
-	        	print "temp_alpha is.." , temp_alpha
-	        	break
-	        else:
-	            temp_alpha = temp_alpha / 1.5
+	old_cost = 1000
+	while (old_cost - current_cost > 0.0001):
 	    old_cost = current_cost
+	    current_cost = float(train(train_set[0], labeled, temp_alpha))
 
 	prediction = predict_function(test_set[0])
 	accuracy(prediction, test_set[1])
