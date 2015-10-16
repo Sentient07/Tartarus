@@ -63,11 +63,11 @@ if __name__ == '__main__':
 	n_valid_batches = inp_test_set.get_value(borrow=True).shape[0] / 500
 	n_test_batches = inp_test_set_cv_set.get_value(borrow=True).shape[0] / 500
 
-	weights = (10, 50)
+	weights = (10, 40)
 	bias = 10
 
-	hidden_weights = (50, 784)
-	hidden_bias = 50
+	hidden_weights = (40, 784)
+	hidden_bias = 40
 
 
 	#using shared function because it's a convenient
@@ -103,13 +103,13 @@ if __name__ == '__main__':
 	updates = [(w, w - alpha * grad(cost, w)) for w in weights]
 	train = function([inp, labels, alpha], cost, updates=updates)
 
-	temp_alpha = 6.0
+	temp_alpha = 10.0
 	labeled = encode_labels(train_set[1], 9)
 	old_cost = 1000
+	current_cost = 100
 	while (old_cost - current_cost > 0.0001):
-	    old_cost = current_cost
-	    current_cost = float(train(train_set[0], labeled, temp_alpha))
+		old_cost = current_cost
+		current_cost = float(train(train_set[0], labeled, temp_alpha))
 
 	prediction = predict_function(test_set[0])
 	accuracy(prediction, test_set[1])
-	
