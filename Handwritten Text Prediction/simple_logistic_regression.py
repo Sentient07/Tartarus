@@ -66,15 +66,20 @@ if __name__ == '__main__':
 	weights = (10, 40)
 	bias = 10
 
-	hidden_weights = (40, 784)
-	hidden_bias = 40
+	hidden1_weights = (40, 784)
+	hidden1_bias = 40
+
+	hidden2_weights = (40, 40)
+	hidden2_bias = 40
 
 
 	#using shared function because it's a convenient
 	w2 = shared(np.random.random(weights) - 0.5, name="w2")
 	b2 = shared(np.random.random(bias) - 0.5, name="b2")
-	w1 = shared(np.random.random(hidden_weights) - 0.5, name="w1")
-	b1 = shared(np.random.random(hidden_bias) - 0.5, name="b1")
+	w3 = shared(np.random.random(hidden2_weights) - 0.5, name="w3")
+	b3 = shared(np.random.random(hidden2_bias) - 0.5, name="b3")
+	w1 = shared(np.random.random(hidden1_weights) - 0.5, name="w1")
+	b1 = shared(np.random.random(hidden1_bias) - 0.5, name="b1")
 
 
 	#little confusion between usage of dmatrix and dvector
@@ -83,23 +88,31 @@ if __name__ == '__main__':
 	#Encode labels
 
 	#The hidden layer computation
-	hidden = T.nnet.sigmoid(inp.dot(w1.transpose()) + b1)
+	hidden1 = T.nnet.sigmoid(inp.dot(w1.transpose()) + b1)
+	print hidden1.shape
 
+	hidden2 = T.nnet.sigmoid(hidden1.dot(w3.transpose()) + b3)
 	#The softmax computation
-	output = T.nnet.softmax(hidden.dot(w2.transpose()) + b2)
+	output = T.nnet.softmax(hidden2.dot(w2.transpose()) + b2)
 	predict = T.argmax(output, axis=1)
 	
 	cost = T.nnet.binary_crossentropy(output, labels).mean()
 
 	#Regularization
-	#cost = cost + 0.0001 * ((w_shared * w_shared).sum() + (hidden_w_shared * hidden_w_shared).sum()+ (b_shared * b_shared).sum() + (hidden_b_shared * hidden_b_shared).sum())
+	cost = cost + 0.0001 * ((w1 * w1).sum() + 
+		(w2 * w2).sum()+ 
+		(w3 * w3).sum() + 
+		(b1 * b1).sum() +
+		(b2 * b2).sum() +
+		(b3 * b3).sum())
+
 
 
 	predict_function = function([inp], predict)
 
 	alpha = T.dscalar('alpha')
 	#weights = [hidden_w_shared, w_shared, hidden_b_shared, b_shared]
-	weights = [w1, w2, b1, b2]
+	weights = [w1, w2, w3, b1, b2, b3]
 	updates = [(w, w - alpha * grad(cost, w)) for w in weights]
 	train = function([inp, labels, alpha], cost, updates=updates)
 
@@ -107,9 +120,17 @@ if __name__ == '__main__':
 	labeled = encode_labels(train_set[1], 9)
 	old_cost = 1000
 	current_cost = 100
-	while (old_cost - current_cost > 0.0001):
+	while ((old_cost - current_cost > 0.00005) or (old_cost - current_cost < -0.00005)):
 		old_cost = current_cost
 		current_cost = float(train(train_set[0], labeled, temp_alpha))
 
+	print ("test set prediction")
 	prediction = predict_function(test_set[0])
 	accuracy(prediction, test_set[1])
+
+	print ("CV set prediction")
+	prediction = predict_function(valid_set[0])
+	accuracy(prediction, valid_set[1])
+
+
+
