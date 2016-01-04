@@ -1,0 +1,1 @@
+Recognition of text in images using various Convolution Neural Network architectures. 
