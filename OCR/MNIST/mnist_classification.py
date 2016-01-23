@@ -131,6 +131,3 @@ if __name__ == '__main__':
 	print ("CV set prediction")
 	prediction = predict_function(valid_set[0])
 	accuracy(prediction, valid_set[1])
-
-
-
