@@ -1,2 +1,2 @@
 # Tartarus
-This repository consists of various programs that implements neural networks to solve some simple classification problems.
+This repository consists of various Deep Learning models to solve wide range of Machine Learning problems.
