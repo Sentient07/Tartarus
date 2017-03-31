@@ -1,5 +1,0 @@
-Algorithm Used,Accuracy Produced
-Nearest Centroid( Eucledian metrix),57.10%
-SVM with RBF kernel,71.50%
-SVM with Polynomial Kernel,11.72%
-K-Nearest Neighbour (minikowski metrics),71.00%
