@@ -1,6 +1,7 @@
 The Model directory contains the following models (All the models are implemented in Theano and Lasagne)
 1) GANs:
-	1) Deep Convolution GAN (DCGAN) 
+	1) Deep Convolution GAN (DCGAN)
+	3) Stacked GAN
 
 2) Fast RCNN (implemented over):
 	1) VGG 16
