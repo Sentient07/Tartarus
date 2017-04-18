@@ -1,4 +1,6 @@
-# Cell for required DCGAN imports
+
+# Implementation of Deep Convolution Generative Adversarial Network on flickr dataset
+# This demo is to check the adaptability of DCGAN with higher resolution images
 import theano
 import theano.tensor as tensor
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
@@ -119,7 +121,8 @@ def build_disc(inp):
     print ("Discriminator output:", net.output_shape)
     return net
 
-def main(train_data, out_dir='~/', random_seed=1234567899, batch_size=10, num_epochs=20, initial_lr=2e-04, ):
+
+def main(train_data, out_dir='~/', random_seed=None, batch_size=10, num_epochs=20, initial_lr=2e-04):
 
     lr = theano.shared(np.float32(initial_lr))
     batch_size = 10
@@ -147,7 +150,10 @@ def main(train_data, out_dir='~/', random_seed=1234567899, batch_size=10, num_ep
 
     # Gen updates
     gen_updates = lasagne.updates.adam(generator_loss, gen_params, beta1=np.float32(0.5), learning_rate=lr)
-    disc_updates = lasagne.updates.adam(discriminator_loss, disc_params, beta1=np.float32(0.5), learning_rate=lr)
+
+    overall_update = gen_updates.update(lasagne.updates.adam(
+                                        discriminator_loss, disc_params, beta1=np.float32(0.5), 
+                                        learning_rate=lr))
 
     srng = RandomStreams(seed=np.random.randint(random_seed, size=6))
 
@@ -156,8 +162,10 @@ def main(train_data, out_dir='~/', random_seed=1234567899, batch_size=10, num_ep
     # Compile theano functions
     # Functions for training
     print("Starting to compile functions")
-    train_gen_func = theano.function([], generator_loss, givens={noise_var: noise}, updates=gen_updates)
-    train_disc_func = theano.function([x_inp], discriminator_loss, givens={noise_var: noise}, updates=disc_updates)
+
+    train_func = theano.function([x_inp, noise_var], [(disc > 0.5).mean(), (disc_over_gen < 0.5).mean()],
+                                 updates=overall_update)
+
     print("done compiling training functions")
     # Functions for generating
     generate_im_func = theano.function([noise_var], lasagne.layers.get_output(load_gen, deterministic=True))
@@ -173,13 +181,14 @@ def main(train_data, out_dir='~/', random_seed=1234567899, batch_size=10, num_ep
         offset = 0
         for bn in range(batch_number):
             inputs = train_data[offset:offset + batch_size]
-            gen_loss.append(train_gen_func())
-            disc_loss.append(train_disc_func(inputs))
+            if not random_seed:
+                noise = lasagne.utils.floatX(np.random.rand(len(inputs), 100))
+            gan_loss.append(train_func(inputs, noise))
             offset += batch_size
         end = time.time()
-        print("Gen loss is " + str(np.mean(gen_loss)))
-        print("Disc loss is " + str(np.mean(disc_loss)))
+        print("DC GAN loss is " + str(np.mean(gan_loss)))
         print("Finished {} of {}. Time taken {:.3f}s".format(ep + 1, num_epochs,  end - begin))
+
         # Decaying the learning after half of the epoch is over
         # this technique has been adapted from Jan Schutler's GAN gist
         if ep >= num_epochs // 2:
@@ -195,7 +204,7 @@ if __name__ == '__main__':
     parser.add_argument('--out_dir', type=str, default=npy_path)
     parser.add_argument('--data_dir', type=str, default=npy_path)
     parser.add_argument('--num_epoch', type = int, default = 20)
-    parser.add_argument('--seed', type=int, default=1234567899)
+    parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--lr', type=float, default=2e-04) # learning rate for generator
     # Low batchsize as i don't have access to a good GPU
     parser.add_argument('--batch_size', type=int, default=10)
