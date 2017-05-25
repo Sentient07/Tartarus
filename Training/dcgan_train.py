@@ -122,7 +122,7 @@ def build_disc(inp):
     return net
 
 
-def main(train_data, out_dir='~/', random_seed=None, batch_size=10, num_epochs=20, initial_lr=2e-04):
+def main(train_data, out_dir='~/', random_seed=None, batch_size=10, num_epochs=2000, initial_lr=2e-04):
 
     lr = theano.shared(np.float32(initial_lr))
     batch_size = 10

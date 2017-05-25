@@ -570,7 +570,7 @@ class ElemwiseMergeLayer(MergeLayer):
 
 def normalise(im):
     im = im / np.float32(127.5) - np.float32(1.)
-    return im
+    return im.astype(np.float32)
 
 def denormalise(im, tanh=True):
     im = ((im + np.float32(1.0)) * np.float32(127.5)).astype(np.uint8)
@@ -618,20 +618,16 @@ def gen_fmask(fc_out):
 
 # Discriminator
 def build_desc(inp):
-    net0= DropoutLayer(InputLayer((None, 3, 32, 32), input_var=inp), p=0.2)
+    net0= InputLayer((None, 3, 32, 32), input_var=inp)
     # 32 * 32
-    net10 = batch_norm(Conv2DLayer(net0, 96, 3, pad=1, W=w1, nonlinearity=lr))
-    net11 = batch_norm(Conv2DLayer(net10, 96, 3, pad=1, W=w1, nonlinearity=lr))
-    net1 = DropoutLayer(batch_norm(Conv2DLayer(net11, 96, 3, stride=2, pad=1, W=w1, nonlinearity=lr)), p=0.5)
+    net1 = batch_norm(Conv2DLayer(net0, 96, 3, stride=2, pad='same', W=w1, nonlinearity=lr))
     print ("Disc output:", net1.output_shape)
     # 16 * 16
     
-    net20 = batch_norm(Conv2DLayer(net1, 192, 3, pad=1, W=w1, nonlinearity=lr))
-    net21 = batch_norm(Conv2DLayer(net20, 192, 3, pad=1, W=w1, nonlinearity=lr))
-    net2 = DropoutLayer(batch_norm(Conv2DLayer(net21, 192, 3, stride=2, pad=1, W=w1, nonlinearity=lr)), p=0.5)
+    net2 = batch_norm(Conv2DLayer(net1, 192, 3, stride=2, pad='same', W=w1, nonlinearity=lr))
     print ("Disc output:", net2.output_shape)
     # 8 * 8
-    net3 = batch_norm(Conv2DLayer(net2, 192, 3, pad=0, W=w1, nonlinearity=lr))
+    net3 = batch_norm(Conv2DLayer(net2, 192, 3, pad='same', W=w1, nonlinearity=lr))
     print ("Disc output:", net3.output_shape)
     # 6 * 6
     net4 = batch_norm(NINLayer(net3, 192, W=w1, nonlinearity=lr))
@@ -641,7 +637,7 @@ def build_desc(inp):
 
     net7 = DenseLayer(net6, 1, W=w1, nonlinearity=sigmoid)
     print ("Discriminator output:", net7.output_shape)
-    return net7
+    return net7, net6
 
 def construct_gen(noise_1, noise_2, batch_size=10):
     # There are two time steps considered for this model, so two LSTMs
@@ -651,42 +647,42 @@ def construct_gen(noise_1, noise_2, batch_size=10):
     lstm1_inp = InputLayer((None, 1, 100), input_var=noise1_rshp)
     lstm2_inp = InputLayer((None, 1, 100), input_var=noise2_rshp)
 
-    lstm1 = ExposedLSTMLayer(lstm1_inp, 100 , only_return_final=True)
-
-    lstm1_c = SliceLayer(lstm1, indices=slice(0, num_units), axis=-1)
-    lstm1_h = SliceLayer(lstm1, indices=slice(num_units, None), axis=-1)
-    lstm1_reshape = ReshapeLayer(lstm1_h, (batch_size, 100))
-
-    lstm2 = ExposedLSTMLayer(lstm2_inp, 100, hid_init=lstm1_h, cell_init=lstm1_c)
+    lstm2 = ExposedLSTMLayer(lstm2_inp, 100)
     lstm2_h = SliceLayer(lstm2, indices=slice(num_units, None), axis=-1)
     lstm2_reshape = ReshapeLayer(lstm2_h, (batch_size, 100))
 
-    print("LSTM1's output is " + str(lstm1_reshape.output_shape))
+
     print("LSTM2's output is " + str(lstm2_reshape.output_shape))
 
-    build_bg = gen_bg(lstm1_reshape)
+    build_bg = gen_bg(lstm1_inp)
     build_gfc = gen_fc(lstm2_reshape)
     build_gif = gen_fi(build_gfc)
     build_gfmask = gen_fmask(build_gfc)
     
     # Affine transformation and pasting with bg
     a_t = DenseLayer(lstm2_reshape, num_units=6, W=w1) #6 dim output
-    m_t_hat = PadLayer(TransformerLayer(build_gfmask, a_t, downsample_factor=2), 8)
-    f_t_hat = PadLayer(TransformerLayer(build_gif, a_t, downsample_factor=2), 8)
+    m_t_hat = NonlinearityLayer(PadLayer(TransformerLayer(build_gfmask, a_t, downsample_factor=2), 8), nonlinearity=tanh)
+    f_t_hat = NonlinearityLayer(PadLayer(TransformerLayer(build_gif, a_t, downsample_factor=2), 8), nonlinearity=tanh)
     
     prior = ElemwiseMergeLayer([m_t_hat, f_t_hat], merge_function=tensor.mul, broadcastable=1)
     posterior = ElemwiseMergeLayer([ComplimentLayer(m_t_hat), build_bg], merge_function=tensor.mul, broadcastable=1)
 
     gen_image = ElemwiseSumLayer([prior, posterior])
+
     return gen_image
 
+
+def log_sum_exp(x, axis=1):
+    m = tensor.max(x, axis=axis)
+    return m + tensor.log(tensor.sum(tensor.exp(x-m.dimshuffle(0,'x')), axis=axis))
+
+
 def plot_image(generated_image, epoch_val, save_path):
-    fig, axes1 = plt.subplots(5, 5, figsize=(8, 8))
+    fig, axes1 = plt.subplots(5, 5, figsize=(3, 3))
     # axes1.set_axis_off()
     # axes1.imshow(reshaped_image[10])
     # fig.imshow(reshaped_image[10])
-    gen_trans_image = generated_image.transpose(0, 2, 3, 1)
-    orig_trans_image = reshaped_image.transpose(0, 2, 3, 1)
+    gen_trans_image = denormalise(generated_image, tanh=True)
     img_h, img_w = (32, 32)
     grid_shape = 8
     grid_pad = 5
@@ -698,7 +694,7 @@ def plot_image(generated_image, epoch_val, save_path):
         for k in range(5):
             i = np.random.choice(range(len(gen_trans_image)))
             axes1[j][k].set_axis_off()
-            deproc = ((gen_trans_image[i:i+1][0] + 1) * 127.5).astype(np.uint8)
+            deproc = gen_trans_image[i:i+1][0]
             axes1[j][k].imshow((deproc))
         row = (j // grid_shape) * (img_h + grid_pad)
         col = (j % grid_shape) * (img_w + grid_pad)
@@ -718,10 +714,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', default=1)
     parser.add_argument('--seed_data', default=1)
-    parser.add_argument('--batch_size', default=100)
-    parser.add_argument('--initial_lr', type=float, default=0.0002)
+    parser.add_argument('--batch_size', default=10)
+    parser.add_argument('--initial_lr', type=float, default=0.004)
     parser.add_argument('--data_dir', type=str, default='/Users/Ramana/projects/data/cifar-100-python/train')
-    parser.add_argument('--num_epochs', default=500)
+    parser.add_argument('--num_epochs', default=1000)
     parser.add_argument('--output_path', type=str, default='/Users/Ramana/projects/data/cifar-100-python/')
 
     args = parser.parse_args()
@@ -729,11 +725,11 @@ if __name__ == '__main__':
 
     # Path to where the train file is
     cifar_data = unpickle(args.data_dir)
-    reshaped_image = cifar_data['data'].reshape(50000, 3, 32, 32)
+    reshaped_image = cifar_data['data'].reshape(50000, 3, 32, 32)[np.random.randint(50000, size=1000), :, :, :]
     transposed_image = reshaped_image.transpose(0, 2, 3, 1)
     
     # Setting learning rate
-    l_r = theano.shared(np.float32(args.initial_lr))
+    l_r = theano.shared(lasagne.utils.floatX(args.initial_lr))
     batch_number = int(round(len(reshaped_image) / args.batch_size))
 
     # Noise assignment
@@ -747,33 +743,35 @@ if __name__ == '__main__':
 
     # Build the network
     gen = construct_gen(noise_bg, noise_fg, batch_size=args.batch_size)
-    desc = build_desc(x_inp)
+    disc, features = build_desc(x_inp)
 
     # Output of discriminator with original images. training phase, so non deterministic
-    disc = lasagne.layers.get_output(desc, deterministic=False)
+    disc_out = lasagne.layers.get_output(disc, x_inp, deterministic=False)
+    gen_out = lasagne.layers.get_output(gen)
+    disc_over_gen = lasagne.layers.get_output(disc, gen_out)
+    true_features = lasagne.layers.get_output(features, x_inp)
+    fake_features = lasagne.layers.get_output(features, gen_out)
+    # Loss functions. 1) Gen's 2) Disc's for predicting correctly 3) Feature matching loss
+    false_loss = log_sum_exp(disc_over_gen)
+    truth_loss = log_sum_exp(disc_out)
+    disc_loss = -0.5 * tensor.mean(truth_loss) + 0.5 * tensor.mean(tensor.nnet.softplus(truth_loss)) + 0.5 * tensor.mean(tensor.nnet.softplus(false_loss))
+    gen_loss = tensor.mean(abs(tensor.mean(true_features, axis=0) - tensor.mean(fake_features, axis=0)))
 
-    # Output of Disc over Gen. 
-    disc_over_gen = lasagne.layers.get_output(desc, lasagne.layers.get_output(gen))
-
-    # Loss functions
-    generator_loss = binary_crossentropy(disc_over_gen, tensor.ones_like(disc_over_gen)).mean()
-    discriminator_loss = (binary_crossentropy(disc, tensor.ones_like(disc)) + 
-                          binary_crossentropy(disc_over_gen, tensor.zeros_like(disc_over_gen))).mean()
-
-    # Update params
+    # Fetch and Update params
     gen_params = lasagne.layers.get_all_params(gen, trainable=True)
-    disc_params = lasagne.layers.get_all_params(desc, trainable=True)
+    disc_params = lasagne.layers.get_all_params(disc, trainable=True)
 
-    updates = lasagne.updates.adam(generator_loss, gen_params, beta1=0.5, learning_rate=l_r)
-    updates.update(lasagne.updates.adam(discriminator_loss, disc_params, beta1=0.5, 
-                                        learning_rate=l_r))
+    disc_updates = lasagne.updates.adam(disc_loss, disc_params, learning_rate=l_r, beta1=0.5)
+    gen_updates = lasagne.updates.adam(gen_loss, gen_params, learning_rate=l_r, beta1=0.5)
+
+
     # Compile theano functions
     print("Starting to compile functions")
-    train_func = theano.function([x_inp], [(disc > 0.5).mean(), (disc_over_gen < 0.5).mean()],
-                                 updates=updates)
+    train_disc = theano.function([x_inp], [disc_loss], updates=disc_updates)
+    train_gen = theano.function(inputs=[x_inp], outputs=None, updates=gen_updates)
     print("done compiling training function")
     # Functions for generating
-    generate_im_func = theano.function([], lasagne.layers.get_output(gen))
+    generate_im_func = theano.function([], gen_out)
     print("done all compilation")
 
     for ep in range(args.num_epochs):
@@ -782,16 +780,26 @@ if __name__ == '__main__':
         begin = time.time()
         offset = 0
         loss = 0
-        for num_iter, bn in enumerate(range(batch_number)):
-            inputs = reshaped_image[offset:offset + args.batch_size] / np.float32(127.5) - 1
 
-            loss += np.array(train_func(inputs))
+        for num_iter, bn in enumerate(range(batch_number)):
+            # Randomly shuffle inputs
+            shuffled_inputs = reshaped_image[np.random.randint(len(reshaped_image), size=len(reshaped_image)), :, :, :]
+            inputs = normalise(shuffled_inputs[offset:offset + args.batch_size])
+            loss += np.array(train_disc(inputs))
+            train_gen(inputs)
             offset += args.batch_size
         end = time.time()
         print("LR GAN loss is " + str(loss / np.float32(batch_number)))
         print("Finished {} of {}. Time taken {:.3f}s".format(ep + 1, args.num_epochs,  end - begin))
 
-        # Print the image generated for every 50epochs
+        # PLot the image generated for every 50epochs
         if ep % 50 == 0:
+            np.savez('cifar_gen' + str(ep) + '.npz', *lasagne.layers.get_all_param_values(gen))
+            np.savez('cifar_disc' + str(ep) + '.npz', *lasagne.layers.get_all_param_values(disc))
             generated_image = generate_im_func()
             plot_image(generated_image, ep, args.output_path)
+
+        # Degrading the learning rate
+        if ep >= args.num_epochs // 4:
+            progress = float(ep) / args.num_epochs
+            l_r.set_value(lasagne.utils.floatX(args.initial_lr*2*(1 - progress)))
