@@ -1,2 +1,2 @@
 # Tartarus
-This repository consists of implementation of various research papers in the domain of Deep Learning for computer vision, that are not necessarily the sate-of-the art and isn't available in any Recipes/Model Zoos etc..
+This repository consists of implementations of research papers in Deep Learning for computer vision and model zoo consisting of some of the widely known Deep Learning Models. The implementations are done using Theano, Lasagne, Numpy in python. If you want to use this code, please cite Theano.
