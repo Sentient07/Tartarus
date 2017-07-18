@@ -1,6 +1,7 @@
-# Implementation of Deconvolution network over VGG16
+# Implementation of Deconv network for semantic Segmentation paper
 # Link to Paper : https://arxiv.org/pdf/1505.04366.pdf
 # Author : sentient07
+# This just contains the model
 
 from __future__ import absolute_import
 

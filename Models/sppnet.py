@@ -1,6 +1,7 @@
 # Implementation of Sppnet
 # Link to Paper : https://arxiv.org/pdf/1406.4729.pdf
 # Author : sentient07
+# For using the Spatial pooling layer, refer to: https://github.com/Theano/Theano/pull/5395
 
 from __future__ import absolute_import
 

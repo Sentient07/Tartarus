@@ -8,7 +8,7 @@ Instructions :
 This requires the ROIPool branch of theano and lasagne, from https://www.github.com/sentient07/Theano
 and https://github.com/Sentient07/Lasagne respectively.
 
-For setting up the ROI, you need the roidb. Along with that, you need iou metric to evaluate overlap.
+For setting up the ROI, you need the roidb. Along with that, iou metric is suggested to evaluate the overlap.
 The code for that is in a separate repository. This contains only the model.
 """
 
@@ -25,11 +25,12 @@ import numpy as np
 import time
 
 def zf_rpn(inp, roidb):
-    net = {}
-    # Replace this InputLayer with ROIData Layer
-    # And train over another network to obtain 
-    # CaffeNet model or the RPN, Regional Proposal Network
+    '''
+    inp - 4D input Theano tensor
+    roidb - Region of Interest, expected in `tensor` format
 
+    '''
+    net = {}
     net['input'] = InputLayer((None, 3, 224, 224), input_var=inp)
     net['conv1'] = Conv2DLayer(net['input'], 96, 11, stride=4, pad=5)
     net['pool1'] = MaxPool2DLayer(net['conv1'], 3, stride=2, pad=1)
@@ -45,7 +46,8 @@ def zf_rpn(inp, roidb):
     net['fc6_drop'] = DropoutLayer(net['fc6'], p=0.5)
     net['fc7'] = DenseLayer(net['fc6_drop'], num_units=4096, W=lasagne.init.Uniform(), b=lasagne.init.Constant(1.))
     net['fc7_drop'] = DropoutLayer(net['fc7'], p=0.5)
-    net['cls_dense'] = DenseLayer(net['fc7_drop'], num_units=21, W=lasagne.init.Normal(), nonlinearity=None)
-    net['cls_score'] = NonlinearityLayer(net['cls_dense'], softmax)
+    # Here, assign classes to pixels across the channel dimension
+    # And then predict the bounding box-coordinates
+    net['cls_dense'] = DenseLayer(net['fc7_drop'], num_units=21, W=lasagne.init.Normal(), nonlinearity=softmax)
     net['bbox_pred'] = DenseLayer(net['fc7_drop'], num_units=84, W=lasagne.init.Normal(std=0.001), nonlinearity=None)
     return net
